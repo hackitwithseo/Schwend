@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Instagram Swchend Button",
+  "version": "1.0",
+  "description": "Pridá tlacítko swchend pod tlacítko Send na Instagram Reels",
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icon.png",
+      "48": "icon.png",
+      "128": "icon.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.instagram.com/*"],
+      "js": ["content.js"],
+      "css": ["style.css"]
+    }
+  ]
+}
