@@ -144,4 +144,24 @@ function injectSwchendButton() {
   });
 }
 
+// Klávesová zkratka: Šipka vpravo (ArrowRight) pro odeslání
+document.addEventListener("keydown", (e) => {
+  // Ignorujeme, pokud uživatel právě píše do textového pole nebo chatu
+  const activeEl = document.activeElement;
+  const isTyping =
+    activeEl &&
+    (activeEl.tagName === "INPUT" ||
+      activeEl.tagName === "TEXTAREA" ||
+      activeEl.isContentEditable);
+
+  if (isTyping) return;
+
+  // Pokud je stisknuta šipka vpravo
+  if (e.key === "ArrowRight") {
+    e.preventDefault();
+    e.stopPropagation();
+    sendReelToTarget();
+  }
+});
+
 setInterval(injectSwchendButton, 1000);
