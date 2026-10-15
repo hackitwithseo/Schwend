@@ -1,22 +1,77 @@
 let targetUsername = localStorage.getItem("swchend_target") || null;
+let buttonLabelText = localStorage.getItem("swchend_label") || "Swchend";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Funkce pro otevření GUI Nastavení
+function openSettingsGUI() {
+  if (document.querySelector(".swchend-modal-overlay")) return;
+
+  const overlay = document.createElement("div");
+  overlay.className = "swchend-modal-overlay";
+
+  overlay.innerHTML = `
+    <div class="swchend-modal-card">
+      <div class="swchend-modal-header">
+        <span class="swchend-modal-title">Swchend Settings</span>
+        <button class="swchend-modal-close" id="swchend-close-btn">&times;</button>
+      </div>
+      <div class="swchend-field-group">
+        <label>Target Username</label>
+        <input type="text" id="swchend-input-user" value="${targetUsername || ""}" placeholder="e.g. jan_novak" />
+      </div>
+      <div class="swchend-field-group">
+        <label>Button Label</label>
+        <input type="text" id="swchend-input-label" value="${buttonLabelText}" placeholder="Button name" />
+      </div>
+      <div class="swchend-modal-actions">
+        <button class="swchend-btn-cancel" id="swchend-cancel-btn">Cancel</button>
+        <button class="swchend-btn-save" id="swchend-save-btn">Save Changes</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  const closeBtn = overlay.querySelector("#swchend-close-btn");
+  const cancelBtn = overlay.querySelector("#swchend-cancel-btn");
+  const saveBtn = overlay.querySelector("#swchend-save-btn");
+
+  const closeModal = () => overlay.remove();
+
+  closeBtn.addEventListener("click", closeModal);
+  cancelBtn.addEventListener("click", closeModal);
+
+  saveBtn.addEventListener("click", () => {
+    const userVal = overlay.querySelector("#swchend-input-user").value.trim().toLowerCase();
+    const labelVal = overlay.querySelector("#swchend-input-label").value.trim() || "Swchend";
+
+    if (userVal) {
+      targetUsername = userVal;
+      localStorage.setItem("swchend_target", targetUsername);
+    }
+
+    buttonLabelText = labelVal;
+    localStorage.setItem("swchend_label", buttonLabelText);
+
+    // Aktualizovat popisky tlačítek v DOMu
+    document.querySelectorAll(".swchend-main-label").forEach((el) => {
+      el.innerText = buttonLabelText;
+    });
+
+    closeModal();
+  });
+}
+
+// Funkce pro automatické odeslání Reel
 async function sendReelToTarget() {
   if (!targetUsername) {
-    const userPrompt = prompt(
-      "Zadej přesný Instagram USERNAME člověka, kterému se má reel automaticky posílat (např. jan_novak):"
-    );
-    if (!userPrompt) return;
-    targetUsername = userPrompt.trim().toLowerCase();
-    localStorage.setItem("swchend_target", targetUsername);
-    alert(`Příjemce uložen: ${targetUsername}\nKlikni na Swchend znovu pro odeslání.`);
+    openSettingsGUI();
     return;
   }
 
-  // Najít originální tlačítko Send v pravé liště akcí
   const sendButton = document.querySelector('svg[aria-label="Share"], svg[aria-label="Sdílet příspěvek"], svg[aria-label="Share Post"], svg[aria-label="Sdílet"]')?.closest('div[role="button"]') ||
                      document.querySelector('path[d*="M13.973 20.046"]')?.closest('div[role="button"]') ||
                      document.querySelector('path[d*="M13.973 20.046"]')?.closest('button');
@@ -68,29 +123,24 @@ function injectSwchendButton() {
     const icon = element.tagName.toLowerCase() === 'path' ? element.closest('svg') : element;
     if (!icon) return;
 
-    // FILTR: Ignorujeme cokoliv v dolní liště zpráv, modalech nebo plovoucích elementech
     if (icon.closest('div[role="dialog"]') || icon.closest('div[style*="fixed"]') || icon.closest('div[style*="absolute"]') || icon.closest('footer')) return;
 
     const sendButtonBlock = icon.closest('div[role="button"]') || icon.closest('button');
     if (!sendButtonBlock) return;
 
-    // Ujistíme se, že jsme opravdu v postranním sloupci Reels tlačítek (hledáme rodiče s Likes/Comments)
     const columnContainer = sendButtonBlock.parentElement;
     if (!columnContainer) return;
 
-    // Kontrola, zda rodičovský sloupec obsahuje i další akční ikony (aby to nebylo okno zpráv)
     const hasOtherActions = columnContainer.querySelector('svg[aria-label="Like"], svg[aria-label="Comment"], svg[aria-label="To se mi líbí"], svg[aria-label="Komentář"]') ||
                              columnContainer.parentElement?.querySelector('svg[aria-label="Like"], svg[aria-label="Comment"], svg[aria-label="To se mi líbí"]');
     
     if (!hasOtherActions) return;
 
-    // Vynutíme svislé uspořádání pro původní tlačítko Share
     sendButtonBlock.style.display = "flex";
     sendButtonBlock.style.flexDirection = "column";
     sendButtonBlock.style.alignItems = "center";
     sendButtonBlock.style.justifyContent = "center";
 
-    // Přidání textu "Share" pod originální ikonu letadélka
     if (!sendButtonBlock.querySelector('.swchend-share-label')) {
       const shareLabel = document.createElement("span");
       shareLabel.className = "swchend-label swchend-share-label";
@@ -98,16 +148,14 @@ function injectSwchendButton() {
       sendButtonBlock.appendChild(shareLabel);
     }
 
-    // Kontrola duplicity pro Swchend
     if (columnContainer.querySelector(".swchend-wrapper")) return;
 
-    // Vytvoření bloku pro tlačítko Swchend
     const wrapper = document.createElement("div");
     wrapper.className = "swchend-wrapper";
 
     const swchendBtn = document.createElement("button");
     swchendBtn.className = "swchend-icon-btn";
-    swchendBtn.title = "Swchend (Levý klik: poslat, Pravý klik: změnit příjemce)";
+    swchendBtn.title = `${buttonLabelText} (Levý klik / Šipka doprava: poslat, Pravý klik: nastavení GUI)`;
 
     swchendBtn.innerHTML = `
       <svg aria-label="Swchend" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="24" height="24">
@@ -118,35 +166,34 @@ function injectSwchendButton() {
     `;
 
     const label = document.createElement("span");
-    label.className = "swchend-label";
-    label.innerText = "Swchend";
+    label.className = "swchend-label swchend-main-label";
+    label.innerText = buttonLabelText;
 
     wrapper.appendChild(swchendBtn);
     wrapper.appendChild(label);
 
+    // Levý klik = Odeslat
     wrapper.addEventListener("click", (e) => {
       e.stopPropagation();
       e.preventDefault();
       sendReelToTarget();
     });
 
+    // Pravý klik = Otevřít GUI Nastavení
     wrapper.addEventListener("contextmenu", (e) => {
       e.preventDefault();
-      const newTarget = prompt("Změnit příjemce (aktuální: " + (targetUsername || "žádný") + "):");
-      if (newTarget) {
-        targetUsername = newTarget.trim().toLowerCase();
-        localStorage.setItem("swchend_target", targetUsername);
-        alert(`Nový příjemce: ${targetUsername}`);
-      }
+      e.stopPropagation();
+      openSettingsGUI();
     });
 
     sendButtonBlock.insertAdjacentElement("afterend", wrapper);
   });
 }
 
-// Klávesová zkratka: Šipka vpravo (ArrowRight) pro odeslání
+setInterval(injectSwchendButton, 1000);
+
+// Klávesová zkratka: Šipka doprava (ArrowRight)
 document.addEventListener("keydown", (e) => {
-  // Ignorujeme, pokud uživatel právě píše do textového pole nebo chatu
   const activeEl = document.activeElement;
   const isTyping =
     activeEl &&
@@ -156,12 +203,9 @@ document.addEventListener("keydown", (e) => {
 
   if (isTyping) return;
 
-  // Pokud je stisknuta šipka vpravo
   if (e.key === "ArrowRight") {
     e.preventDefault();
     e.stopPropagation();
     sendReelToTarget();
   }
 });
-
-setInterval(injectSwchendButton, 1000);
