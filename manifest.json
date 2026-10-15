@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Instagram Swchend Button",
+  "name": "Instagram InstaSend Button",
   "version": "1.0",
-  "description": "Pridá tlacítko swchend pod tlacítko Send na Instagram Reels",
+  "description": "Adds Button To InstaSend Reels",
   "icons": {
     "16": "icon.png",
     "48": "icon.png",

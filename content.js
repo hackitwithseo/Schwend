@@ -1,16 +1,59 @@
-let targetUsername = localStorage.getItem("swchend_target") || null;
+let defaultTarget = localStorage.getItem("swchend_target") || "";
 let buttonLabelText = localStorage.getItem("swchend_label") || "Swchend";
+let keyMappings = JSON.parse(localStorage.getItem("swchend_key_mappings") || "{}");
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// Funkce pro otevření GUI Nastavení
+// Najde tlačítko Share toho Reelu, který je aktuálně uprostřed obrazovky
+function getActiveShareButton() {
+  const windowCenter = window.innerHeight / 2;
+  const allShareIcons = document.querySelectorAll(
+    'svg[aria-label="Share"], svg[aria-label="Sdílet příspěvek"], svg[aria-label="Share Post"], svg[aria-label="Sdílet"], path[d*="M13.973 20.046"]'
+  );
+
+  let bestBtn = null;
+  let minDistance = Infinity;
+
+  allShareIcons.forEach((icon) => {
+    const btn = icon.closest('div[role="button"]') || icon.closest('button');
+    if (!btn) return;
+
+    const rect = btn.getBoundingClientRect();
+    
+    // Ignorovat plovoucí chat vpravo dole
+    const isBottomRightChat = rect.top > window.innerHeight - 180 && rect.left > window.innerWidth - 400;
+    if (isBottomRightChat || btn.closest('div[role="dialog"]') || btn.closest('footer')) return;
+
+    if (rect.bottom >= 0 && rect.top <= window.innerHeight) {
+      const btnCenter = (rect.top + rect.bottom) / 2;
+      const distance = Math.abs(btnCenter - windowCenter);
+      if (distance < minDistance) {
+        minDistance = distance;
+        bestBtn = btn;
+      }
+    }
+  });
+
+  return bestBtn;
+}
+
+// GUI Nastavení
 function openSettingsGUI() {
   if (document.querySelector(".swchend-modal-overlay")) return;
 
   const overlay = document.createElement("div");
   overlay.className = "swchend-modal-overlay";
+
+  const keysList = ["ArrowLeft", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+  
+  let keyInputsHTML = keysList.map(k => `
+    <div class="swchend-field-group">
+      <label>Key [${k}] Target Username</label>
+      <input type="text" class="swchend-key-input" data-key="${k}" value="${keyMappings[k] || ""}" placeholder="username pro klávesu ${k}" />
+    </div>
+  `).join('');
 
   overlay.innerHTML = `
     <div class="swchend-modal-card">
@@ -18,45 +61,51 @@ function openSettingsGUI() {
         <span class="swchend-modal-title">Swchend Settings</span>
         <button class="swchend-modal-close" id="swchend-close-btn">&times;</button>
       </div>
-      <div class="swchend-field-group">
-        <label>Target Username</label>
-        <input type="text" id="swchend-input-user" value="${targetUsername || ""}" placeholder="e.g. jan_novak" />
-      </div>
-      <div class="swchend-field-group">
-        <label>Button Label</label>
-        <input type="text" id="swchend-input-label" value="${buttonLabelText}" placeholder="Button name" />
+      <div class="swchend-modal-scrollable">
+        <div class="swchend-field-group">
+          <label>Default Target (Click / ArrowRight)</label>
+          <input type="text" id="swchend-input-user" value="${defaultTarget}" placeholder="např. jan_novak" />
+        </div>
+        <div class="swchend-field-group">
+          <label>Button Label</label>
+          <input type="text" id="swchend-input-label" value="${buttonLabelText}" placeholder="Název tlačítka" />
+        </div>
+        <hr style="border: 0; border-top: 1px solid #363636; margin: 16px 0;">
+        <p style="font-size: 12px; color: #a8a8a8; margin-bottom: 12px; font-weight: 600; text-transform: uppercase;">Přiřazení kláves (různí lidé):</p>
+        ${keyInputsHTML}
       </div>
       <div class="swchend-modal-actions">
-        <button class="swchend-btn-cancel" id="swchend-cancel-btn">Cancel</button>
-        <button class="swchend-btn-save" id="swchend-save-btn">Save Changes</button>
+        <button class="swchend-btn-cancel" id="swchend-cancel-btn">Zrušit</button>
+        <button class="swchend-btn-save" id="swchend-save-btn">Uložit</button>
       </div>
     </div>
   `;
 
   document.body.appendChild(overlay);
 
-  const closeBtn = overlay.querySelector("#swchend-close-btn");
-  const cancelBtn = overlay.querySelector("#swchend-cancel-btn");
-  const saveBtn = overlay.querySelector("#swchend-save-btn");
-
   const closeModal = () => overlay.remove();
 
-  closeBtn.addEventListener("click", closeModal);
-  cancelBtn.addEventListener("click", closeModal);
+  overlay.querySelector("#swchend-close-btn").addEventListener("click", closeModal);
+  overlay.querySelector("#swchend-cancel-btn").addEventListener("click", closeModal);
 
-  saveBtn.addEventListener("click", () => {
-    const userVal = overlay.querySelector("#swchend-input-user").value.trim().toLowerCase();
-    const labelVal = overlay.querySelector("#swchend-input-label").value.trim() || "Swchend";
+  overlay.querySelector("#swchend-save-btn").addEventListener("click", () => {
+    defaultTarget = overlay.querySelector("#swchend-input-user").value.trim().toLowerCase();
+    buttonLabelText = overlay.querySelector("#swchend-input-label").value.trim() || "Swchend";
 
-    if (userVal) {
-      targetUsername = userVal;
-      localStorage.setItem("swchend_target", targetUsername);
-    }
-
-    buttonLabelText = labelVal;
+    localStorage.setItem("swchend_target", defaultTarget);
     localStorage.setItem("swchend_label", buttonLabelText);
 
-    // Aktualizovat popisky tlačítek v DOMu
+    const newMappings = {};
+    overlay.querySelectorAll(".swchend-key-input").forEach(input => {
+      const k = input.getAttribute("data-key");
+      const val = input.value.trim().toLowerCase();
+      if (val) {
+        newMappings[k] = val;
+      }
+    });
+    keyMappings = newMappings;
+    localStorage.setItem("swchend_key_mappings", JSON.stringify(keyMappings));
+
     document.querySelectorAll(".swchend-main-label").forEach((el) => {
       el.innerText = buttonLabelText;
     });
@@ -65,19 +114,14 @@ function openSettingsGUI() {
   });
 }
 
-// Funkce pro automatické odeslání Reel
-async function sendReelToTarget() {
-  if (!targetUsername) {
+// Společná logika pro provedení odeslání
+async function executeSend(sendButton, target) {
+  if (!target) {
     openSettingsGUI();
     return;
   }
-
-  const sendButton = document.querySelector('svg[aria-label="Share"], svg[aria-label="Sdílet příspěvek"], svg[aria-label="Share Post"], svg[aria-label="Sdílet"]')?.closest('div[role="button"]') ||
-                     document.querySelector('path[d*="M13.973 20.046"]')?.closest('div[role="button"]') ||
-                     document.querySelector('path[d*="M13.973 20.046"]')?.closest('button');
-
   if (!sendButton) {
-    alert("Nebylo možné najít originální tlačítko Send!");
+    alert("Nebylo možné najít tlačítko Send pro tento Reel!");
     return;
   }
 
@@ -91,7 +135,7 @@ async function sendReelToTarget() {
   }
 
   searchInput.focus();
-  searchInput.value = targetUsername;
+  searchInput.value = target;
   searchInput.dispatchEvent(new Event("input", { bubbles: true }));
   await sleep(1000);
 
@@ -114,6 +158,7 @@ async function sendReelToTarget() {
   }
 }
 
+// Injektování tlačítek na stránku
 function injectSwchendButton() {
   const sendIcons = document.querySelectorAll(
     'svg[aria-label="Share"], svg[aria-label="Sdílet příspěvek"], svg[aria-label="Share Post"], svg[aria-label="Sdílet"], path[d*="M13.973 20.046"]'
@@ -123,18 +168,17 @@ function injectSwchendButton() {
     const icon = element.tagName.toLowerCase() === 'path' ? element.closest('svg') : element;
     if (!icon) return;
 
-    if (icon.closest('div[role="dialog"]') || icon.closest('div[style*="fixed"]') || icon.closest('div[style*="absolute"]') || icon.closest('footer')) return;
-
     const sendButtonBlock = icon.closest('div[role="button"]') || icon.closest('button');
     if (!sendButtonBlock) return;
 
+    const rect = sendButtonBlock.getBoundingClientRect();
+    
+    // Ignorovat výhradně plovoucí chat v pravém dolním rohu
+    const isBottomRightChat = rect.top > window.innerHeight - 180 && rect.left > window.innerWidth - 400;
+    if (isBottomRightChat || icon.closest('div[role="dialog"]') || icon.closest('footer')) return;
+
     const columnContainer = sendButtonBlock.parentElement;
     if (!columnContainer) return;
-
-    const hasOtherActions = columnContainer.querySelector('svg[aria-label="Like"], svg[aria-label="Comment"], svg[aria-label="To se mi líbí"], svg[aria-label="Komentář"]') ||
-                             columnContainer.parentElement?.querySelector('svg[aria-label="Like"], svg[aria-label="Comment"], svg[aria-label="To se mi líbí"]');
-    
-    if (!hasOtherActions) return;
 
     sendButtonBlock.style.display = "flex";
     sendButtonBlock.style.flexDirection = "column";
@@ -148,14 +192,15 @@ function injectSwchendButton() {
       sendButtonBlock.appendChild(shareLabel);
     }
 
-    if (columnContainer.querySelector(".swchend-wrapper")) return;
+    let nextEl = sendButtonBlock.nextElementSibling;
+    if (nextEl && nextEl.classList.contains("swchend-wrapper")) return;
 
     const wrapper = document.createElement("div");
     wrapper.className = "swchend-wrapper";
 
     const swchendBtn = document.createElement("button");
     swchendBtn.className = "swchend-icon-btn";
-    swchendBtn.title = `${buttonLabelText} (Levý klik / Šipka doprava: poslat, Pravý klik: nastavení GUI)`;
+    swchendBtn.title = `${buttonLabelText} (Levý klik: poslat, Pravý klik: nastavení GUI)`;
 
     swchendBtn.innerHTML = `
       <svg aria-label="Swchend" role="img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="24" height="24">
@@ -172,14 +217,12 @@ function injectSwchendButton() {
     wrapper.appendChild(swchendBtn);
     wrapper.appendChild(label);
 
-    // Levý klik = Odeslat
     wrapper.addEventListener("click", (e) => {
       e.stopPropagation();
       e.preventDefault();
-      sendReelToTarget();
+      executeSend(sendButtonBlock, defaultTarget);
     });
 
-    // Pravý klik = Otevřít GUI Nastavení
     wrapper.addEventListener("contextmenu", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -192,7 +235,7 @@ function injectSwchendButton() {
 
 setInterval(injectSwchendButton, 1000);
 
-// Klávesová zkratka: Šipka doprava (ArrowRight)
+// Globální klávesové zkratky
 document.addEventListener("keydown", (e) => {
   const activeEl = document.activeElement;
   const isTyping =
@@ -203,9 +246,18 @@ document.addEventListener("keydown", (e) => {
 
   if (isTyping) return;
 
+  let targetForAction = null;
+
   if (e.key === "ArrowRight") {
+    targetForAction = defaultTarget;
+  } else if (e.key === "ArrowLeft" || (e.key >= "1" && e.key <= "9")) {
+    targetForAction = keyMappings[e.key];
+  }
+
+  if (targetForAction) {
     e.preventDefault();
     e.stopPropagation();
-    sendReelToTarget();
+    const activeShareBtn = getActiveShareButton();
+    executeSend(activeShareBtn, targetForAction);
   }
 });
